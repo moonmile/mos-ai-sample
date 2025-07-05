@@ -1,0 +1,399 @@
+@page "/cart"
+@rendermode @(new InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using System.Text.Json
+@using System.Text
+@using blazor_sample.Services
+@inject blazor_sample.Services.CartService CartService
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>ショッピングカート</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>ショッピングカート</h1>
+    <button class="btn btn-outline-secondary" @onclick="GoBack">
+        <i class="bi bi-arrow-left"></i> 買い物を続ける
+    </button>
+</div>
+
+@if (!CartService.Items.Any())
+{
+    <div class="text-center mt-5">
+        <div class="card">
+            <div class="card-body py-5">
+                <i class="bi bi-cart-x display-1 text-muted mb-3"></i>
+                <h4 class="text-muted">カートは空です</h4>
+                <p class="text-muted mb-4">商品をカートに追加してください</p>
+                <a href="/categories" class="btn btn-primary">
+                    <i class="bi bi-bag"></i>商品を見る
+                </a>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- カート内容 -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">カート内容 (@CartService.TotalItems 点)</h5>
+                </div>
+                <div class="card-body p-0">
+                    @foreach (var item in CartService.Items)
+                    {
+                        <div class="cart-item p-3 border-bottom">
+                            <div class="row align-items-center">
+                                <div class="col-md-2">
+                                    @if (!string.IsNullOrEmpty(item.Product.Image))
+                                    {
+                                        <img src="/images/@(item.Product.Image).jpeg" class="img-fluid rounded cart-item-image" alt="@item.Product.Name" />
+                                    }
+                                    else
+                                    {
+                                        <div class="cart-item-placeholder rounded">
+                                            <i class="bi bi-image text-muted"></i>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-md-2">
+                                    <h6 class="mb-1">@item.Product.Name</h6>
+                                    @if (!string.IsNullOrEmpty(item.Product.Description))
+                                    {
+                                        <small class="text-muted">@item.Product.Description</small>
+                                    }
+                                    <br />
+                                    <small class="text-muted">商品ID: @item.Product.Id</small>
+                                </div>
+                                <div class="col-md-2 text-center">
+                                    <span class="fw-bold">¥@item.Product.Price.ToString("N0")</span>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="input-group input-group-sm">
+                                        <button class="btn btn-outline-secondary btn-quantity" type="button" @onclick="() => DecreaseQuantity(item.Product.Id)" title="数量を減らす">
+                                            <i class="bi bi-dash" />
+                                        </button>
+                                        <input type="number" class="form-control text-center" value="@item.Quantity" @onchange="(e) => UpdateQuantity(item.Product.Id, e)" min="1" max="99" />
+                                        <button class="btn btn-outline-secondary btn-quantity" type="button" @onclick="() => IncreaseQuantity(item.Product.Id)" title="数量を増やす">
+                                            <i class="bi bi-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 text-center">
+                                    <span class="fw-bold text-primary">¥@item.TotalPrice.ToString("N0")</span>
+                                </div>
+                                <div class="col-md-1 text-center">
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveItem(item.Product.Id)" title="削除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- カート操作ボタン -->
+            <div class="mt-3">
+                <button class="btn btn-outline-danger" @onclick="ClearCart">
+                    <i class="bi bi-trash"></i> カートを空にする
+                </button>
+            </div>
+        </div>
+
+        <!-- 注文サマリー -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">注文サマリー</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>商品点数:</span>
+                        <span>@CartService.TotalItems 点</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>小計:</span>
+                        <span>¥@CartService.TotalPrice.ToString("N0")</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>配送料:</span>
+                        <span>¥0</span>
+                    </div>
+                    <hr />
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>合計:</strong>
+                        <strong class="text-primary h5">¥@CartService.TotalPrice.ToString("N0")</strong>
+                    </div>
+                    
+                    @if (isProcessing)
+                    {
+                        <button class="btn btn-primary w-100 btn-lg" disabled>
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">処理中...</span>
+                            </div>
+                            注文処理中...
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary w-100 btn-lg mb-2" @onclick="PlaceOrder">
+                            <i class="bi bi-credit-card"></i> 注文する
+                        </button>
+                    }
+                    
+                    <button class="btn btn-outline-secondary w-100" @onclick="GoBack">
+                        <i class="bi bi-arrow-left"></i> 買い物を続ける
+                    </button>
+
+                    @if (orderError != null)
+                    {
+                        <div class="alert alert-danger mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> @orderError
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- お得情報 -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-info-circle text-info"></i> お得情報
+                    </h6>
+                    <p class="card-text small text-muted">
+                        3,000円以上のご注文で送料無料！<br />
+                        現在のご注文金額: ¥@CartService.TotalPrice.ToString("N0")
+                    </p>
+                    @if (CartService.TotalPrice < 3000)
+                    {
+                        <p class="small text-info">
+                            送料無料まで あと ¥@((3000 - CartService.TotalPrice).ToString("N0"))
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="small text-success">
+                            <i class="bi bi-check-circle"></i> 送料無料対象です！
+                        </p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 注文完了モーダル -->
+@if (showSuccessModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-check-circle text-success">✓</i> 注文完了
+                    </h5>
+                </div>
+                <div class="modal-body text-center">
+                    <h4>ご注文ありがとうございました！</h4>
+                    <p class="mb-3">注文番号: <strong>@orderNumber</strong></p>
+                    <p class="text-muted">
+                        注文確認メールをお送りしましたので、ご確認ください。<br />
+                        商品の準備ができ次第、配達いたします。
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="GoToCategories">
+                        カテゴリ一覧に戻る
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cart-item-image {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+    }
+
+    .cart-item-placeholder {
+        width: 80px;
+        height: 80px;
+        background-color: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .cart-item {
+        transition: background-color 0.2s;
+    }
+
+    .cart-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* 数量変更ボタンのスタイル */
+    .btn-quantity {
+        min-width: 32px;
+        font-weight: bold;
+        font-size: 16px;
+    }
+
+    .btn-quantity:hover {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+
+
+</style>
+
+@code {
+    private bool isProcessing = false;
+    private string? orderError;
+    private bool showSuccessModal = false;
+    private string? orderNumber;
+
+    protected override void OnInitialized()
+    {
+        CartService.PropertyChanged += OnCartChanged;
+    }
+
+    private void OnCartChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void IncreaseQuantity(int productId)
+    {
+        var item = CartService.Items.FirstOrDefault(i => i.Product.Id == productId);
+        if (item != null && item.Quantity < 99)
+        {
+            CartService.UpdateQuantity(productId, item.Quantity + 1);
+        }
+    }
+
+    private void DecreaseQuantity(int productId)
+    {
+        var item = CartService.Items.FirstOrDefault(i => i.Product.Id == productId);
+        if (item != null && item.Quantity > 1)
+        {
+            CartService.UpdateQuantity(productId, item.Quantity - 1);
+        }
+    }
+
+    private void UpdateQuantity(int productId, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int quantity))
+        {
+            CartService.UpdateQuantity(productId, quantity);
+        }
+    }
+
+    private void RemoveItem(int productId)
+    {
+        CartService.RemoveFromCart(productId);
+    }
+
+    private void ClearCart()
+    {
+        CartService.ClearCart();
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/categories");
+    }
+
+    private async Task PlaceOrder()
+    {
+        try
+        {
+            isProcessing = true;
+            orderError = null;
+
+            // 注文データを作成
+            var orderData = new
+            {
+                total_price = (int)CartService.TotalPrice,
+                total_quantity = CartService.TotalItems,
+                items = CartService.Items.Select(item => new
+                {
+                    id = item.Product.Id,
+                    price = (int)item.Product.Price,
+                    quantity = item.Quantity
+                }).ToArray()
+            };
+
+            var json = JsonSerializer.Serialize(orderData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await Http.PostAsync("http://localhost:8000/mos/api/orders", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var orderResponse = JsonSerializer.Deserialize<OrderResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                orderNumber = orderResponse?.Order_number ?? $"ORD{DateTime.Now:yyyyMMddHHmmss}";
+                
+                // カートをクリア
+                CartService.ClearCart();
+                
+                // 成功モーダルを表示
+                showSuccessModal = true;
+            }
+            else
+            {
+                orderError = "注文の処理中にエラーが発生しました。もう一度お試しください。";
+            }
+        }
+        catch (Exception ex)
+        {
+            orderError = $"注文の送信に失敗しました: {ex.Message}";
+            
+            // エラー時はサンプル注文番号を生成（デモ用）
+            orderNumber = $"ORD{DateTime.Now:yyyyMMddHHmmss}";
+            CartService.ClearCart();
+            showSuccessModal = true;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void GoToHome()
+    {
+        showSuccessModal = false;
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoToCategories()
+    {
+        showSuccessModal = false;
+        Navigation.NavigateTo("/categories");
+    }
+
+    public void Dispose()
+    {
+        CartService.PropertyChanged -= OnCartChanged;
+    }
+
+    public class OrderResponse
+    {
+        public string Order_number { get; set; } = string.Empty;
+    }
+}

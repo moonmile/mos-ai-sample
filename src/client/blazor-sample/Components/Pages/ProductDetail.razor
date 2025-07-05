@@ -1,0 +1,403 @@
+@page "/product/{productId:int}"
+@rendermode @(new InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using System.Text.Json
+@using blazor_sample.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject blazor_sample.Services.CartService CartService
+
+<PageTitle>商品詳細 - @(product?.Name ?? "読み込み中")</PageTitle>
+
+@if (isLoading)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">読み込み中...</span>
+        </div>
+        <p class="mt-2">商品詳細を読み込み中...</p>
+    </div>
+}
+else if (product == null || hasError)
+{
+    <div class="text-center mt-5">
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i> 
+            商品が見つかりませんでした。
+        </div>
+        <button class="btn btn-primary" @onclick="GoBack">
+            <i class="bi bi-arrow-left"></i> 商品一覧に戻る
+        </button>
+    </div>
+}
+else
+{
+    <!-- ナビゲーションパン -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="/categories" class="text-decoration-none">カテゴリ一覧</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="javascript:void(0)" @onclick="GoBack" class="text-decoration-none">商品一覧</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">@product.Name</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- 商品画像 -->
+        <div class="col-md-6 mb-4">
+            <div class="product-image-container">
+                @if (!string.IsNullOrEmpty(product.Image))
+                {
+                    <img src="/images/@(product.Image).jpeg" class="img-fluid rounded product-main-image" alt="@product.Name" />
+                }
+                else
+                {
+                    <div class="product-image-placeholder rounded">
+                        <i class="bi bi-image text-muted"></i>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 商品情報 -->
+        <div class="col-md-6">
+            <div class="product-info">
+                <h1 class="product-title">@product.Name</h1>
+                
+                @if (!string.IsNullOrEmpty(product.Description))
+                {
+                    <p class="product-description text-muted mb-4">@product.Description</p>
+                }
+
+                <div class="price-section mb-4">
+                    <span class="product-price h2 text-primary">¥@product.Price.ToString("N0")</span>
+                    <small class="text-muted ms-2">(税込)</small>
+                </div>
+
+                <div class="product-actions mb-4">
+                    <div class="row g-3">
+                        <div class="col-auto">
+                            <div class="input-group" style="width: 120px;">
+                                <button class="btn btn-outline-secondary" type="button" @onclick="DecreaseQuantity">
+                                    <i class="bi bi-dash"></i>
+                                </button>
+                                <input type="number" class="form-control text-center" @bind="quantity" min="1" max="99" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="IncreaseQuantity">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <button class="btn btn-primary btn-lg" @onclick="AddToCart" disabled="@(!product.Display)">
+                                <i class="bi bi-cart-plus"></i> カートに追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!product.Display)
+                {
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> この商品は現在販売されていません。
+                    </div>
+                }
+
+                <!-- 商品詳細情報 -->
+                <div class="product-details">
+                    <h5>商品情報</h5>
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted">商品ID</td>
+                                <td>@product.Id</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">商品コード</td>
+                                <td>@product.Slug</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">登録日</td>
+                                <td>@product.Created_at.ToString("yyyy年MM月dd日")</td>
+                            </tr>
+                            @if (product.Updated_at != product.Created_at)
+                            {
+                                <tr>
+                                    <td class="text-muted">更新日</td>
+                                    <td>@product.Updated_at.ToString("yyyy年MM月dd日")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- アクションボタン -->
+    <div class="row mt-5">
+        <div class="col">
+            <button class="btn btn-outline-secondary" @onclick="GoBack">
+                <i class="bi bi-arrow-left"></i> 商品一覧に戻る
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    .product-image-container {
+        position: relative;
+        background: #f8f9fa;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .product-main-image {
+        width: 100%;
+        height: auto;
+        max-height: 500px;
+        object-fit: cover;
+    }
+
+    .product-image-placeholder {
+        height: 400px;
+        background-color: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 4rem;
+    }
+
+    .product-title {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+    }
+
+    .product-description {
+        font-size: 1.1rem;
+        line-height: 1.6;
+    }
+
+    .product-price {
+        font-weight: bold;
+    }
+
+    .price-section {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .product-actions {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .product-details {
+        margin-top: 1rem;
+    }
+
+    .breadcrumb-item a {
+        color: #0066cc;
+    }
+
+    .breadcrumb-item a:hover {
+        color: #004499;
+        text-decoration: underline !important;
+    }
+</style>
+
+@code {
+    [Parameter] public int ProductId { get; set; }
+
+    private Product? product;
+    private bool isLoading = true;
+    private bool hasError = false;
+    private int quantity = 1;
+    private string? categorySlug;
+    private int? lastLoadedProductId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 商品IDが変更された場合のみAPIを呼び出す
+        if (ProductId > 0 && ProductId != lastLoadedProductId)
+        {
+            isLoading = true;
+            lastLoadedProductId = ProductId;
+            await LoadProduct();
+        }
+    }
+
+    private async Task LoadProduct()
+    {
+        try
+        {
+            isLoading = true;
+            hasError = false;
+            
+            var response = await Http.GetAsync($"http://localhost:8000/mos/api/products/{ProductId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                product = JsonSerializer.Deserialize<Product>(jsonString, options);
+
+                // カテゴリSlugを取得するため、カテゴリ情報も取得
+                if (product != null)
+                {
+                    await LoadCategorySlug(product.CategoryId);
+                }
+            }
+            else
+            {
+                hasError = true;
+                product = null;
+            }
+        }
+        catch (Exception)
+        {
+            hasError = true;
+            // 接続エラーの場合、サンプルデータを使用
+            product = new Product 
+            { 
+                Id = ProductId, 
+                Name = "サンプル商品", 
+                Description = "これはサンプル商品の詳細です。API接続が失敗した場合に表示されます。", 
+                Price = 500, 
+                Image = "",
+                CategoryId = 1,
+                Display = true,
+                Created_at = DateTime.Now.AddDays(-30),
+                Updated_at = DateTime.Now.AddDays(-5),
+                Slug = "sample-product"
+            };
+            categorySlug = "sample-category";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadCategorySlug(int categoryId)
+    {
+        try
+        {
+            var response = await Http.GetAsync("http://localhost:8000/mos/api/categories");
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var categoryResponse = JsonSerializer.Deserialize<CategoryResponse>(jsonString, options);
+                var category = categoryResponse?.Items?.FirstOrDefault(c => c.Id == categoryId);
+                categorySlug = category?.Slug ?? "";
+            }
+        }
+        catch (Exception)
+        {
+            categorySlug = "";
+        }
+    }
+
+    private void IncreaseQuantity()
+    {
+        if (quantity < 99)
+        {
+            quantity++;
+        }
+    }
+
+    private void DecreaseQuantity()
+    {
+        if (quantity > 1)
+        {
+            quantity--;
+        }
+    }
+
+    private void AddToCart()
+    {
+        if (product != null)
+        {
+            var cartProduct = new blazor_sample.Services.Product
+            {
+                Id = product.Id,
+                CategoryId = product.CategoryId,
+                Slug = product.Slug,
+                Name = product.Name,
+                Description = product.Description,
+                Image = product.Image,
+                Price = product.Price,
+                Sortid = product.Sortid,
+                Display = product.Display,
+                Created_at = product.Created_at,
+                Updated_at = product.Updated_at,
+                Deleted_at = product.Deleted_at
+            };
+            
+            CartService.AddToCart(cartProduct, quantity);
+            
+            // カート追加完了の通知（簡易版）
+            // 実際のアプリケーションではトーストやモーダルで通知します
+            Navigation.NavigateTo("/cart");
+        }
+    }
+
+    private void GoBack()
+    {
+        if (!string.IsNullOrEmpty(categorySlug))
+        {
+            Navigation.NavigateTo($"/products/{categorySlug}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/categories");
+        }
+    }
+
+    public class Product
+    {
+        public int Id { get; set; }
+        public int CategoryId { get; set; }
+        public string Slug { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public int Sortid { get; set; }
+        public bool Display { get; set; }
+        public DateTime Created_at { get; set; }
+        public DateTime Updated_at { get; set; }
+        public DateTime? Deleted_at { get; set; }
+    }
+
+    public class Category
+    {
+        public int Id { get; set; }
+        public string Slug { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+        public int Sortid { get; set; }
+        public bool Display { get; set; }
+        public DateTime Created_at { get; set; }
+        public DateTime Updated_at { get; set; }
+        public DateTime? Deleted_at { get; set; }
+    }
+
+    public class CategoryResponse
+    {
+        public List<Category> Items { get; set; } = new();
+        public int Total { get; set; }
+    }
+}

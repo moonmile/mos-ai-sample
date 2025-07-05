@@ -1,0 +1,230 @@
+@page "/"
+@page "/categories"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using System.Text.Json
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>ショッピングサイト - カテゴリ一覧</PageTitle>
+
+<h1>商品カテゴリ</h1>
+
+<p>カテゴリを管理します。</p>
+
+@if (categories == null)
+{
+    <p><em>読み込み中...</em></p>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col">
+            <button class="btn btn-primary" @onclick="ShowAddForm">
+                <i class="bi bi-plus-circle"></i> 新しいカテゴリを追加
+            </button>
+        </div>
+    </div>
+
+    @if (showAddForm)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>新しいカテゴリ</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="categoryName" class="form-label">カテゴリ名</label>
+                    <input type="text" class="form-control" id="categoryName" @bind="newCategoryName" placeholder="カテゴリ名を入力してください" />
+                </div>
+                <div class="mb-3">
+                    <label for="categoryDescription" class="form-label">説明</label>
+                    <textarea class="form-control" id="categoryDescription" @bind="newCategoryDescription" rows="3" placeholder="カテゴリの説明を入力してください"></textarea>
+                </div>
+                <div>
+                    <button class="btn btn-success me-2" @onclick="AddCategory">
+                        <i class="bi bi-check-circle"></i> 追加
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CancelAdd">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="row">
+        @foreach (var category in categories)
+        {
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100 category-card" @onclick="() => ViewProducts(category.Slug)" style="cursor: pointer;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">@category.Title</h5>
+                        <div class="dropdown" @onclick:stopPropagation="true">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" @onclick="() => EditCategory(category)" @onclick:stopPropagation="true">
+                                    <i class="bi bi-pencil"></i> 編集
+                                </a></li>
+                                <li><a class="dropdown-item text-danger" href="#" @onclick="() => DeleteCategory(category)" @onclick:stopPropagation="true">
+                                    <i class="bi bi-trash"></i> 削除
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">@category.Description</p>
+                        <small class="text-muted">作成日: @category.Created_at.ToString("yyyy/MM/dd")</small>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-primary">
+                            <i class="bi bi-box-seam"></i> 商品を見る
+                        </small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (!categories.Any())
+    {
+        <div class="text-center mt-4">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> カテゴリが登録されていません。
+            </div>
+        </div>
+    }
+}
+
+<style>
+    .category-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .category-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+</style>
+
+@code {
+    private List<Category>? categories;
+    private bool showAddForm = false;
+    private string newCategoryName = string.Empty;
+    private string newCategoryDescription = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // サンプルデータを読み込み
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        try
+        {
+            var response = await Http.GetAsync("http://localhost:8000/mos/api/categories");
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var categoryResponse = JsonSerializer.Deserialize<CategoryResponse>(jsonString, options);
+                categories = categoryResponse?.Items ?? new List<Category>();
+            }
+            else
+            {
+                // エラーハンドリング - サンプルデータを使用
+                categories = new List<Category>();
+            }
+        }
+        catch (Exception)
+        {
+            // 接続エラーの場合、サンプルデータを使用
+            categories = new List<Category>
+            {
+                new Category { Id = 1, Title = "テクノロジー", Description = "最新のテクノロジーに関する情報", Created_at = DateTime.Now.AddDays(-30) },
+                new Category { Id = 2, Title = "ビジネス", Description = "ビジネス戦略やマーケティング", Created_at = DateTime.Now.AddDays(-20) }
+            };
+        }
+    }
+
+    private void ShowAddForm()
+    {
+        showAddForm = true;
+        newCategoryName = string.Empty;
+        newCategoryDescription = string.Empty;
+    }
+
+    private void CancelAdd()
+    {
+        showAddForm = false;
+        newCategoryName = string.Empty;
+        newCategoryDescription = string.Empty;
+    }
+
+    private void AddCategory()
+    {
+        if (!string.IsNullOrWhiteSpace(newCategoryName))
+        {
+            var newCategory = new Category
+            {
+                Id = categories?.Max(c => c.Id) + 1 ?? 1,
+                Title = newCategoryName.Trim(),
+                Description = newCategoryDescription.Trim(),
+                Created_at = DateTime.Now
+            };
+
+            categories?.Add(newCategory);
+            showAddForm = false;
+            newCategoryName = string.Empty;
+            newCategoryDescription = string.Empty;
+
+            StateHasChanged();
+        }
+    }
+
+    private void EditCategory(Category category)
+    {
+        // 編集機能の実装（モーダルまたは別ページ）
+        // 実装は要件に応じて調整してください
+    }
+
+    private void DeleteCategory(Category category)
+    {
+        if (categories != null)
+        {
+            categories.Remove(category);
+            StateHasChanged();
+        }
+    }
+
+    private void ViewProducts(string categorySlug)
+    {
+        Navigation.NavigateTo($"/products/{categorySlug}");
+    }
+
+    public class Category
+    {
+        public int Id { get; set; }
+        public string Slug { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+        public int Sortid { get; set; }
+        public bool Display { get; set; }
+        public DateTime Created_at { get; set; }
+        public DateTime Updated_at { get; set; }
+        public DateTime? Deleted_at { get; set; }
+    }
+
+    public class CategoryResponse
+    {
+        public List<Category> Items { get; set; } = new();
+        public int Total { get; set; }
+    }
+}

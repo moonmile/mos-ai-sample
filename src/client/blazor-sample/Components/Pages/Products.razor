@@ -1,0 +1,362 @@
+@page "/products/{categorySlug}"
+@rendermode @(new InteractiveServerRenderMode())
+@using Microsoft.AspNetCore.Components.Web
+@using System.Text.Json
+@using blazor_sample.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject blazor_sample.Services.CartService CartService
+
+<PageTitle>商品一覧 - @categoryTitle</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>商品一覧</h1>
+        @if (!string.IsNullOrEmpty(categoryTitle))
+        {
+            <p class="text-muted mb-0">カテゴリ: @categoryTitle</p>
+        }
+    </div>
+    <button class="btn btn-outline-secondary" @onclick="GoBack">
+        <i class="bi bi-arrow-left"></i> カテゴリ一覧に戻る
+    </button>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">読み込み中...</span>
+        </div>
+        <p class="mt-2">商品を読み込み中...</p>
+    </div>
+}
+else if (products == null || !products.Any())
+{
+    <div class="text-center mt-5">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 
+            @if (hasError)
+            {
+                <span>商品の取得に失敗しました。</span>
+            }
+            else
+            {
+                <span>このカテゴリには商品が登録されていません。</span>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="row">
+        @foreach (var product in products)
+        {
+            <div class="col-md-6 col-lg-4 col-xl-3 mb-4">
+                <div class="card h-100 product-card" @onclick="() => ViewProductDetail(product.Id)" style="cursor: pointer;">
+                    @if (!string.IsNullOrEmpty(product.Image))
+                    {
+                        <div class="card-img-top-container">
+                            <img src="/images/@(product.Image).jpeg" class="card-img-top" alt="@product.Name" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-img-top-placeholder">
+                            <i class="bi bi-image text-muted"></i>
+                        </div>
+                    }
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">@product.Name</h5>
+                        @if (!string.IsNullOrEmpty(product.Description))
+                        {
+                            <p class="card-text flex-grow-1">@product.Description</p>
+                        }
+                        <div class="mt-auto">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="h5 text-primary mb-0">¥@product.Price.ToString("N0")</span>
+                                <button class="btn btn-outline-primary btn-sm" @onclick="(e) => AddToCart(e, product)" @onclick:stopPropagation="true">
+                                    <i class="bi bi-cart-plus"></i> カートに追加
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-muted">
+                        <small>商品ID: @product.Id</small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (totalProducts > 0)
+    {
+        <div class="mt-4">
+            <p class="text-muted">全 @totalProducts 件の商品</p>
+        </div>
+    }
+}
+
+<style>
+    .product-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .product-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .card-img-top-container {
+        height: 200px;
+        overflow: hidden;
+    }
+
+    .card-img-top {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .card-img-top-placeholder {
+        height: 200px;
+        background-color: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+    }
+</style>
+
+@code {
+    [Parameter] public string CategorySlug { get; set; } = string.Empty;
+
+    private List<Product>? products;
+    private string categoryTitle = string.Empty;
+    private int totalProducts = 0;
+    private bool isLoading = true;
+    private bool hasError = false;
+    private string? lastLoadedCategorySlug;
+    private static Dictionary<string, string> categoryTitleCache = new();
+    private bool isLoadingInProgress = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // カテゴリスラッグが変更された場合のみAPIを呼び出す（重複防止）
+        if (!string.IsNullOrEmpty(CategorySlug) && 
+            CategorySlug != lastLoadedCategorySlug && 
+            !isLoadingInProgress)
+        {
+            isLoadingInProgress = true;
+            isLoading = true;
+            lastLoadedCategorySlug = CategorySlug;
+            
+            try
+            {
+                await LoadProducts();
+            }
+            finally
+            {
+                isLoadingInProgress = false;
+            }
+        }
+    }
+    private async Task LoadProducts()
+    {
+        try
+        {
+            hasError = false;
+            
+            var response = await Http.GetAsync($"http://localhost:8000/mos/api/products/slug/{CategorySlug}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var productResponse = JsonSerializer.Deserialize<ProductResponse>(jsonString, options);
+                products = productResponse?.Items ?? new List<Product>();
+                totalProducts = productResponse?.Total ?? 0;
+
+                // カテゴリタイトルを取得（キャッシュを使用）
+                await LoadCategoryTitleIfNeeded();
+            }
+            else
+            {
+                hasError = true;
+                products = new List<Product>();
+            }
+        }
+        catch (Exception)
+        {
+            hasError = true;
+            // 接続エラーの場合、サンプルデータを使用
+            products = new List<Product>
+            {
+                new Product 
+                { 
+                    Id = 1, 
+                    Name = "サンプル商品1", 
+                    Description = "これはサンプル商品です", 
+                    Price = 500, 
+                    Image = "",
+                    CategoryId = 1
+                },
+                new Product 
+                { 
+                    Id = 2, 
+                    Name = "サンプル商品2", 
+                    Description = "これもサンプル商品です", 
+                    Price = 750, 
+                    Image = "",
+                    CategoryId = 1
+                }
+            };
+            totalProducts = products.Count;
+            categoryTitle = "サンプルカテゴリ";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadCategoryTitle()
+    {
+        try
+        {
+            var response = await Http.GetAsync("http://localhost:8000/mos/api/categories");
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var categoryResponse = JsonSerializer.Deserialize<CategoryResponse>(jsonString, options);
+                var category = categoryResponse?.Items?.FirstOrDefault(c => c.Slug == CategorySlug);
+                categoryTitle = category?.Title ?? CategorySlug;
+            }
+        }
+        catch (Exception)
+        {
+            categoryTitle = CategorySlug;
+        }
+    }
+
+    private async Task LoadCategoryTitleIfNeeded()
+    {
+        // キャッシュから取得を試行
+        if (categoryTitleCache.TryGetValue(CategorySlug, out var cachedTitle))
+        {
+            categoryTitle = cachedTitle;
+            return;
+        }
+
+        // キャッシュにない場合のみAPIを呼び出し
+        try
+        {
+            var response = await Http.GetAsync("http://localhost:8000/mos/api/categories");
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var categoryResponse = JsonSerializer.Deserialize<CategoryResponse>(jsonString, options);
+                
+                // 全カテゴリをキャッシュに保存
+                if (categoryResponse?.Items != null)
+                {
+                    foreach (var cat in categoryResponse.Items)
+                    {
+                        categoryTitleCache[cat.Slug] = cat.Title;
+                    }
+                }
+                
+                var category = categoryResponse?.Items?.FirstOrDefault(c => c.Slug == CategorySlug);
+                categoryTitle = category?.Title ?? CategorySlug;
+            }
+        }
+        catch (Exception)
+        {
+            categoryTitle = CategorySlug;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/categories");
+    }
+
+    private void ViewProductDetail(int productId)
+    {
+        Navigation.NavigateTo($"/product/{productId}");
+    }
+
+    private void AddToCart(MouseEventArgs e, Product product)
+    {
+        var cartProduct = new blazor_sample.Services.Product
+        {
+            Id = product.Id,
+            CategoryId = product.CategoryId,
+            Slug = product.Slug,
+            Name = product.Name,
+            Description = product.Description,
+            Image = product.Image,
+            Price = product.Price,
+            Sortid = product.Sortid,
+            Display = product.Display,
+            Created_at = product.Created_at,
+            Updated_at = product.Updated_at,
+            Deleted_at = product.Deleted_at
+        };
+        
+        CartService.AddToCart(cartProduct, 1);
+    }
+
+    public class Product
+    {
+        public int Id { get; set; }
+        public int CategoryId { get; set; }
+        public string Slug { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public int Sortid { get; set; }
+        public bool Display { get; set; }
+        public DateTime Created_at { get; set; }
+        public DateTime Updated_at { get; set; }
+        public DateTime? Deleted_at { get; set; }
+    }
+
+    public class ProductResponse
+    {
+        public List<Product> Items { get; set; } = new();
+        public int Total { get; set; }
+    }
+
+    public class Category
+    {
+        public int Id { get; set; }
+        public string Slug { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+        public int Sortid { get; set; }
+        public bool Display { get; set; }
+        public DateTime Created_at { get; set; }
+        public DateTime Updated_at { get; set; }
+        public DateTime? Deleted_at { get; set; }
+    }
+
+    public class CategoryResponse
+    {
+        public List<Category> Items { get; set; } = new();
+        public int Total { get; set; }
+    }
+}
