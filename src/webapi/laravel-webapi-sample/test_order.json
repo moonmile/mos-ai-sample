@@ -1,0 +1,16 @@
+{
+  "total_price": 920,
+  "total_quantity": 3,
+  "items": [
+    {
+      "id": 1,
+      "price": 440,
+      "quantity": 2
+    },
+    {
+      "id": 2,
+      "price": 480,
+      "quantity": 1
+    }
+  ]
+}
