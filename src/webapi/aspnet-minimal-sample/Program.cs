@@ -1,5 +1,6 @@
 using aspnet_minimal_sample.Data;
 using aspnet_minimal_sample.Models;
+using aspnet_minimal_sample.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -16,9 +17,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
 });
 
+// DatabaseSeederサービスを追加
+builder.Services.AddScoped<DatabaseSeeder>();
+
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // CORS設定を追加
 builder.Services.AddCors(options =>
@@ -33,10 +38,34 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// コマンドライン引数の処理
+if (args.Length > 0 && args[0] == "--seed")
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+    
+    try
+    {
+        // データベースの存在確認とマイグレーション
+        await dbContext.Database.EnsureCreatedAsync();
+        await seeder.SeedAsync();
+        Console.WriteLine("データベースシーディングが完了しました。");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"データベースシーディングエラー: {ex.Message}");
+        Environment.Exit(1);
+    }
+    
+    Environment.Exit(0);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 // CORS設定を使用（HTTPSリダイレクトより前に配置）

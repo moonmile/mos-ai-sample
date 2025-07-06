@@ -1,0 +1,72 @@
+# .dockerignore for ASP.NET Minimal API
+
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# Visual Studio files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
+
+# Test results
+TestResults/
+
+# Coverage reports
+coverage/
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# Dev Container files
+.devcontainer/
+
+# Database files
+database/
+
+# Migration scripts
+migrate.ps1
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Secrets
+secrets/
+**/secrets.dev.yaml

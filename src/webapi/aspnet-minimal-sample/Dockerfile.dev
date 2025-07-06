@@ -1,0 +1,17 @@
+# 開発環境用のシンプルなDockerfile
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS development
+WORKDIR /app
+
+# 依存関係をコピーして復元
+COPY *.csproj ./
+RUN dotnet restore
+
+# ソースコードをコピー
+COPY . ./
+
+# ポートを公開
+EXPOSE 5000
+EXPOSE 5001
+
+# 開発サーバーを起動
+CMD ["dotnet", "run", "--urls", "http://+:5000;https://+:5001"]
