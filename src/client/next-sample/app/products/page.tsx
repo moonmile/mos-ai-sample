@@ -61,7 +61,7 @@ export default async function ProductsPage() {
                       <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                         {product.image ? (
                           <img
-                             src={"/images/" + product.image + ".jpeg"}
+                            src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/images/${product.image}`}
                             alt={product.name}
                             className="w-full h-full object-cover"
                           />

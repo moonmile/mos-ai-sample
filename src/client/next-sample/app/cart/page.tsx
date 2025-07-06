@@ -153,7 +153,7 @@ export default function CartPage() {
                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       {item.product.image ? (
                         <img
-                          src={"/images/" + item.product.image + ".jpeg"}
+                            src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/images/${item.product.image}`}
                           alt={item.product.name}
                           className="w-full h-full object-cover"
                         />
