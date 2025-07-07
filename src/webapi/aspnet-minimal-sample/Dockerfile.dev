@@ -1,17 +1,70 @@
-# 開発環境用のシンプルなDockerfile
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS development
-WORKDIR /app
+# Development Dockerfile for devcontainer
+FROM mcr.microsoft.com/dotnet/sdk:9.0
 
-# 依存関係をコピーして復元
-COPY *.csproj ./
-RUN dotnet restore
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Tokyo
 
-# ソースコードをコピー
-COPY . ./
+# Install additional tools
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    unzip \
+    vim \
+    nano \
+    zsh \
+    sudo \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# ポートを公開
-EXPOSE 5000
-EXPOSE 5001
+# Create vscode user with sudo access
+RUN groupadd --gid 1000 vscode \
+    && useradd --uid 1000 --gid vscode --shell /bin/bash --create-home vscode \
+    && echo vscode ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/vscode \
+    && chmod 0440 /etc/sudoers.d/vscode
 
-# 開発サーバーを起動
-CMD ["dotnet", "run", "--urls", "http://+:5000;https://+:5001"]
+# Set up workspace directory with proper permissions
+WORKDIR /workspace
+RUN chown vscode:vscode /workspace
+
+# Switch to vscode user for the rest of the setup
+USER vscode
+
+# Set umask to ensure proper permissions for created files
+RUN echo "umask 022" >> /home/vscode/.bashrc \
+    && echo "umask 022" >> /home/vscode/.zshrc || true
+
+# Install Oh My Zsh with retry logic and error handling
+RUN curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -o install-ohmyzsh.sh \
+    && chmod +x install-ohmyzsh.sh \
+    && bash install-ohmyzsh.sh --unattended \
+    && rm -f install-ohmyzsh.sh \
+    || echo "Oh My Zsh installation failed, continuing..."
+
+# Set the default shell to zsh (switch back to root temporarily)
+USER root
+RUN chsh -s /bin/zsh vscode || echo "Failed to change shell, continuing..."
+
+# Switch back to vscode user
+USER vscode
+
+# Install dotnet tools with error handling
+RUN dotnet tool install --global dotnet-ef || echo "dotnet-ef installation failed" \
+    && dotnet tool install --global dotnet-aspnet-codegenerator || echo "dotnet-aspnet-codegenerator installation failed" \
+    && dotnet tool install --global dotnet-watch || echo "dotnet-watch installation failed"
+
+# Add dotnet tools to PATH
+ENV PATH="${PATH}:/home/vscode/.dotnet/tools"
+
+# Set up git configuration
+RUN git config --global --add safe.directory /workspace \
+    && git config --global init.defaultBranch main
+
+# Create necessary directories
+RUN mkdir -p /home/vscode/.vscode-server/extensions \
+    && mkdir -p /home/vscode/.nuget/packages
+
+# Default command
+CMD ["sleep", "infinity"]

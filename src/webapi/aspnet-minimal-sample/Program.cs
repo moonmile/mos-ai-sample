@@ -8,8 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // MySQL データベース接続設定
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
-        new MySqlServerVersion(new Version(8, 0))));
+    options.UseMySQL(builder.Configuration.GetConnectionString("DefaultConnection")!));
 
 // JSON シリアライゼーション設定（スネークケース）
 builder.Services.ConfigureHttpJsonOptions(options =>

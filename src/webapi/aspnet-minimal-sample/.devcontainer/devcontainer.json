@@ -1,0 +1,54 @@
+{
+  "name": "ASP.NET Core 9.0 Development Container",
+  "dockerFile": "../Dockerfile.dev",
+  "context": "..",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopContainer",
+  
+  // Mount the workspace folder
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+  
+  // Use vscode user for development
+  "remoteUser": "vscode",
+  
+  // Configure tool-specific properties.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "ms-vscode.vscode-json",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "aspnet-minimal-sample.sln",
+        "files.exclude": {
+          "**/bin": true,
+          "**/obj": true
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [
+    8000,
+    8081
+  ],
+
+  // Use 'postCreateCommand' to run commands after the container is created.
+  "postCreateCommand": "chmod +x .devcontainer/init.sh && .devcontainer/init.sh",
+
+  // Configure container features (simplified)
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "username": "vscode",
+      "userUid": "1000",
+      "userGid": "1000"
+    }
+  }
+}
