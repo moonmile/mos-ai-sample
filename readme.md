@@ -10,3 +10,4 @@
     - webapi/mos-api.yaml : OpenAPI 仕様
     - tools/make-image : 画像生成ツール
     - webapi/laravel-webapi-sample : Laravel による WebAPI サンプル
+    - webapi/aspnet-minimal-sample : ASP.NET Core Minimal による web api サンプル & Docker 動作
